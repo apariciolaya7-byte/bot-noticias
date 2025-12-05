@@ -1,5 +1,6 @@
 httpx
 python-telegram-bot
 feedparser
+toml
+tinydb
 python-dotenv
-toml  # <--- ¡Añadir esta línea!
