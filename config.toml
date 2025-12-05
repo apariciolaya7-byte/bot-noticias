@@ -1,0 +1,39 @@
+# config.toml
+
+# ==========================================================
+# CONFIGURACIÓN DEL BOT DE TELEGRAM
+# ==========================================================
+[telegram]
+# Bot token obtenido de BotFather.
+bot_token = "8247431340:AAF9lqRnyylE7_HqkulhdYbngNjC5mZfM1U" 
+# ID del chat, grupo o canal donde se enviará el reporte (debe ser un string).
+chat_id = "8182476929" 
+# Número de teléfono para el botón de compartir en WhatsApp (sin + ni espacios).
+admin_whatsapp_phone = "584249749470" 
+
+# ==========================================================
+# CONFIGURACIÓN DE APIs EXTERNAS
+# ==========================================================
+[api]
+# URL de la API de Kraken para obtener el ticker BTC/USD.
+kraken_url = "https://api.kraken.com/0/public/Ticker?pair=XBTUSD"
+# Tiempo máximo de espera para las respuestas de la API (en segundos).
+api_timeout = 15
+
+# ==========================================================
+# FUENTES DE NOTICIAS RSS
+# ==========================================================
+[rss]
+# Array con las URLs RSS para análisis de sentimiento.
+urls = [
+    "https://www.criptonoticias.com/feed/",
+    "https://es.investing.com/rss/news_cryptocurrency.rss",
+    "https://es.cointelegraph.com/rss"
+]
+
+# ==========================================================
+# CONFIGURACIÓN DE BASE DE DATOS
+# ==========================================================
+[database]
+# Ruta y nombre del archivo de base de datos TinyDB.
+db_path = "trading_data.json"
