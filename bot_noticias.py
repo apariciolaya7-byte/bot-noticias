@@ -289,7 +289,13 @@ async def get_crypto_metrics_via_api(client: httpx.AsyncClient) -> dict:
         })
 
     except httpx.RequestError as e:
+        # 1. Alerta a Slack (¡Nuevo!)
+        await send_slack_alert(f"Falla HTTPX al conectar con Kraken: {e}", client)
+        
+        # 2. Registro Local
         print(f"DEBUG: ERROR HTTPX (Kraken) - {e}")
+        
+        # 3. Retorno de Error
         return ({
             "crypto_status":
             "🔴 ERROR Crypto-API (HTTPX): No se pudo acceder a Kraken.",
@@ -299,9 +305,15 @@ async def get_crypto_metrics_via_api(client: httpx.AsyncClient) -> dict:
             "change_24h_display": "⚠️ N/D",
             "change_24h_float": 0.0
         })
-
+    
     except Exception as e:
+        # 1. Alerta a Slack (¡Nuevo!)
+        await send_slack_alert(f"Falla General en Kraken: {type(e).__name__}", client)
+        
+        # 2. Registro Local
         print(f"DEBUG: ERROR General (Kraken) - {e}")
+        
+        # 3. Retorno de Error
         return ({
             "crypto_status":
             f"🔴 ERROR Crypto (Kraken/Genérico): {type(e).__name__}",
@@ -310,7 +322,9 @@ async def get_crypto_metrics_via_api(client: httpx.AsyncClient) -> dict:
             "btc_price_float": 0.0,
             "change_24h_display": "⚠️ N/D",
             "change_24h_float": 0.0
-        })
+        })    
+
+        
 
 
 # ----------------------------------------------------------------------------------
