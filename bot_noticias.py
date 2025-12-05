@@ -91,6 +91,31 @@ NEGATIVE_KEYWORDS = {
 # ----------------------------------------------------------------------------------
 # --- FUNCIONES DE UTILIDAD (SIN CAMBIOS) ---
 # ----------------------------------------------------------------------------------
+# Colocar esta función junto a las otras utilidades asíncronas
+async def send_slack_alert(message: str, client: httpx.AsyncClient):
+    """
+    Envía un mensaje de error crítico a un canal de Slack
+    leyendo la URL desde las Variables de Entorno.
+    """
+    # Lee la URL desde las variables de entorno, que es la mejor práctica
+    SLACK_WEBHOOK_URL = os.environ.get('SLACK_WEBHOOK_URL') 
+
+    if not SLACK_WEBHOOK_URL:
+        print("DEBUG: La variable de entorno SLACK_WEBHOOK_URL no está configurada. Alerta no enviada.")
+        return
+
+    payload = {
+        "text": f"🚨 BOT CRÍTICO ({datetime.now().strftime('%d/%m %H:%M:%S')}): {message}"
+    }
+
+    try:
+        # Usa el cliente HTTP asíncrono existente
+        await client.post(SLACK_WEBHOOK_URL, json=payload, timeout=5)
+        print("DEBUG: Alerta de Slack enviada con éxito.")
+    except Exception as e:
+        # Registramos el error de Slack, pero no detenemos el bot.
+        print(f"DEBUG: Error al intentar enviar la alerta de Slack: {e}")
+
 def create_whatsapp_link(message_text: str, phone_number: str) -> str:
     # ... (función existente) ...
     clean_text = message_text.replace('*', '').replace('`',
