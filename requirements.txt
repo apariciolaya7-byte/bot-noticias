@@ -1,3 +1,5 @@
 httpx
 python-telegram-bot
 feedparser
+python-dotenv
+toml  # <--- ¡Añadir esta línea!
