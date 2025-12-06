@@ -1,5 +1,5 @@
 # 1. BASE: Imagen base de Python, ligera y optimizada
-FROM python:3.11-slim
+FROM python:3.12
 
 # 3. DEPENDENCIAS DEL SISTEMA: Incluimos las herramientas de compilación de Debian (apt)
 #    Esto es CRUCIAL para pandas-ta, numpy y otras extensiones.
