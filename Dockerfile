@@ -1,6 +1,15 @@
 # 1. BASE: Imagen base de Python, ligera y optimizada
 FROM python:3.11-slim
 
+# 3. DEPENDENCIAS DEL SISTEMA (CRUCIAL para pandas-ta y numpy en Debian/Slim)
+# La bandera --no-install-recommends ayuda a mantener la imagen más pequeña
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    gcc \
+    python3-dev \
+    musl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 # 2. METADATOS: Etiqueta al mantenedor
 LABEL maintainer="junir"
 
