@@ -31,33 +31,27 @@ jobs:
         # La imagen se construye usando el Dockerfile en la raíz del repositorio
         run: docker build -t bot-trading-macd-kraken-v1 .
 
-      - name: 3. Ejecutar Bot y Generar Señal
+      - name: 3. Ejecutar Bot en modo detached
         run: |
           # ❌ ERROR ORIGINAL:
           # docker run \ ubuntu
-          # Esto fallaba porque el "\" al final hacía que "ubuntu" quedara en otra línea,
-          # y Docker interpretaba que no se había especificado la imagen correctamente.
+          # Esto fallaba porque el "\" hacía que "ubuntu" quedara en otra línea
+          # y Docker interpretaba que no se había especificado la imagen.
           #
           # ✅ CORRECCIÓN:
-          # La primera línea debe ser solo "docker run \", sin "ubuntu".
-          # La imagen correcta es la que construimos: bot-trading-macd-kraken-v1
+          # Usamos la imagen construida (bot-trading-macd-kraken-v1) y añadimos "-d"
+          # para que el contenedor corra en segundo plano.
 
-          docker run \
+          docker run -d \
             -e KRAKEN_API_KEY=${{ secrets.KRAKEN_API_KEY }} \
             -e KRAKEN_SECRET_KEY=${{ secrets.KRAKEN_SECRET_KEY }} \
-            \
-            # CONFIGURACIÓN DE ESTRATEGIA (Temporalidad de 1h)
             -e SYMBOL='BTC/USD' \
             -e TIMEFRAME='1h' \
             -e LIMIT='300' \
-            \
-            # CONFIGURACIÓN DE RIESGO
             -e RISK_PER_TRADE='0.01' \
             -e MAX_DRAWDOWN='0.05' \
             -e COOLDOWN_HOURS='24' \
-            \
-            # CONFIGURACIÓN DE TELEGRAM
             -e TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }} \
             -e TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }} \
-            \
             bot-trading-macd-kraken-v1 python macd_trader.py
+
