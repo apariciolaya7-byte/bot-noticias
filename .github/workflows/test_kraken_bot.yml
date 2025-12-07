@@ -21,10 +21,10 @@ jobs:
       run: docker build -t bot-trading-macd-kraken-v1 .
 
     - name: 3. Ejecutar Prueba de Conexión y MACD
-      # El paso crucial: se ejecuta el contenedor, inyectando los secrets de GitHub.
-      run: docker run bot-trading-macd-kraken-v1 python macd_trader.py
-      env:
-        # Se inyectan los Secrets que configuraste en tu repositorio.
-        # Recuerda que en tu script Python estás leyendo KRAKEN_API_KEY.
-        KRAKEN_API_KEY: ${{ secrets.KRAKEN_API_KEY }}
-        KRAKEN_SECRET_KEY: ${{ secrets.KRAKEN_SECRET_KEY }}
+      # Usamos el operador '|' (pipe) para comandos multilínea más limpios
+      run: | 
+        docker run \
+        -e KRAKEN_API_KEY=${{ secrets.KRAKEN_API_KEY }} \
+        -e KRAKEN_SECRET_KEY=${{ secrets.KRAKEN_SECRET_KEY }} \
+        bot-trading-macd-kraken-v1 python macd_trader.py
+      # EL BLOQUE 'env:' ESTÁ OBSOLETO PARA DOCKER RUN Y DEBE ELIMINARSE.
