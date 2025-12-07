@@ -1,61 +1,62 @@
 import os
-from binance.client import Client
-from binance.exceptions import BinanceAPIException, BinanceRequestException
-import ccxt
+import pandas as pd
+import pandas_ta as ta
+import ccxt # <--- ¡Nueva Importación!
 
-# 1. Configuración de Variables de Entorno
+# --- CONFIGURACIÓN DE KRAKEN ---
 # Las variables de entorno son la forma más segura de manejar credenciales
-# Debes configurar BINANCE_API_KEY y BINANCE_SECRET_KEY en tu entorno de CodeSpace/Docker
-export KRAKEN_API_KEY="TU_CLAVE_AQUI"
-export KRAKEN_SECRET_KEY="TU_SECRETO_AQUI"
+# Usamos las mismas variables, pero ahora se conectarán a Kraken.
+API_KEY = os.getenv('KRAKEN_API_KEY') # ¡Cambiar nombre a KRAKEN_API_KEY!
+SECRET_KEY = os.getenv('KRAKEN_SECRET_KEY') # ¡Cambiar nombre a KRAKEN_SECRET_KEY!
 
 if not API_KEY or not SECRET_KEY:
-    print("Error: Las variables de entorno KRAKEN_API_KEY o KRAKEN_SECRET_KEY no están configuradas.")
+    print("Error: Las variables de entorno de Kraken no están configuradas.")
     exit(1)
 
-# Inicializar el cliente de Binance
-client = ccxt.kraken(API_KEY, SECRET_KEY)
+# Inicializar el cliente de Kraken (ccxt maneja la conexión)
+try:
+    exchange = ccxt.kraken({
+        'apiKey': API_KEY,
+        'secret': SECRET_KEY,
+        'enableRateLimit': True, # Para evitar banneos por exceso de peticiones
+    })
+except Exception as e:
+    print(f"Error al inicializar Kraken: {e}")
+    exit(1)
 
-# 2. Función para Obtener Datos de 5 Minutos
-def get_historical_data(symbol, interval, lookback):
+
+# 2. Función para Obtener Datos de 5 Minutos (Usando ccxt)
+def get_historical_data(symbol, timeframe, limit):
     """
-    Obtiene datos de velas (candlesticks) de Kraken.
-    :param symbol: Par de trading (ej: 'BTCUSDT').
-    :param interval: Temporalidad (ej: Client.KLINE_INTERVAL_5MINUTE).
-    :param lookback: Número de periodos a mirar (ej: "100 minutes ago").
+    Obtiene datos de velas (candlesticks) de Kraken usando ccxt.
+    :param symbol: Par de trading (ej: 'BTC/USD').
+    :param timeframe: Temporalidad (ej: '5m').
+    :param limit: Número de velas (ej: 100).
     :return: Lista de velas (OHLCV).
     """
     try:
-        # Petición a la API de Binance
-        klines = client.get_historical_klines(symbol, interval, lookback)
-        
-        # Una vela es: [Tiempo_Apertura, Apertura, Máximo, Mínimo, Cierre, Volumen, ...]
+        # Fetch ohlcv devuelve [timestamp, open, high, low, close, volume]
+        klines = exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
         return klines
         
-    except krakenAPIException as e:
-        print(f"Error de API de Binance: {e}")
+    except ccxt.base.errors.ExchangeError as e:
+        print(f"Error del Exchange Kraken: {e}")
         return None
-    except krakenRequestException as e:
-        print(f"Error de conexión de Binance: {e}")
+    except Exception as e:
+        print(f"Error general de ccxt: {e}")
         return None
 
 # --- Zona de Pruebas ---
 if __name__ == '__main__':
-    # Usaremos BTCUSDT como ejemplo
-    SYMBOL = 'BTCUSDT' 
+    # Kraken usa el formato XBT/USD para Bitcoin, pero el formato estándar es BTC/USDT.
+    # Usaremos el formato estándar para mejor portabilidad.
+    SYMBOL = 'BTC/USDT' 
     
     # La estrategia de scalping es en 5 minutos
-    INTERVAL = Client.KLINE_INTERVAL_5MINUTE 
+    TIMEFRAME = '5m' 
     
-    # Necesitamos unas 26 velas para el MACD (26 periodos) + un margen.
-    LOOKBACK = "1 hour ago" 
+    # Necesitamos unas 100 velas para el MACD y algo de margen.
+    LIMIT = 100
     
-    print(f"Obteniendo datos de {SYMBOL} en la temporalidad de {INTERVAL}...")
-    data = get_historical_data(SYMBOL, INTERVAL, LOOKBACK)
-    
-    if data:
-        print(f"Datos obtenidos con éxito. Número de velas: {len(data)}")
-        # Imprimimos la última vela para verificar
-        print("Última vela (Cierre):", data[-1][4]) 
-    else:
-        print("Fallo al obtener datos.")
+    # ... (El resto de la lógica de pandas y MACD sigue igual)
+    # Asegúrate de cambiar Client.KLINE_INTERVAL_5MINUTE por '5m' en la llamada a get_historical_data
