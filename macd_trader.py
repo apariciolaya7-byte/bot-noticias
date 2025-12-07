@@ -20,11 +20,13 @@ try:
     exchange = ccxt.kraken({
         'apiKey': API_KEY,
         'secret': SECRET_KEY,
-        'enableRateLimit': True, # Para evitar banneos por exceso de peticiones
+        'enableRateLimit': True,
     })
+    exchange.load_markets() # <--- ¡Añadir esto para probar la conexión inmediatamente!
 except Exception as e:
-    print(f"Error al inicializar Kraken: {e}")
-    exit(1)
+    # Si falla la inicialización o la carga de mercados, imprimimos el error y salimos.
+    print(f"❌ FATAL ERROR CCXT: No se pudo inicializar o conectar a Kraken: {e}")
+    exit(1) # <--- Detiene el script con un código de error visible
 
 
 # 2. Función para Obtener Datos de 5 Minutos (Usando ccxt)
@@ -37,15 +39,15 @@ def get_historical_data(symbol, timeframe, limit):
     :return: Lista de velas (OHLCV).
     """
     try:
-        # Fetch ohlcv devuelve [timestamp, open, high, low, close, volume]
         klines = exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
         return klines
         
     except ccxt.base.errors.ExchangeError as e:
-        print(f"Error del Exchange Kraken: {e}")
+        # Esto capturará errores como "API key required" o "Invalid nonce"
+        print(f"❌ Error de API de Kraken al obtener datos: {e}")
         return None
     except Exception as e:
-        print(f"Error general de ccxt: {e}")
+        print(f"❌ Error general en fetch_ohlcv: {e}")
         return None
 
 # --- Zona de Pruebas ---
