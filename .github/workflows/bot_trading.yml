@@ -32,9 +32,7 @@ jobs:
         run: docker build -t bot-trading-macd-kraken-v1 .
 
       - name: 3. Ejecutar Bot y Generar Señal
-        # Inyecta todas las configuraciones de entorno necesarias
         run: |
-          # La sintaxis 'docker run \' permite ejecutar comandos largos en varias líneas
           docker run \
           -e KRAKEN_API_KEY=${{ secrets.KRAKEN_API_KEY }} \
           -e KRAKEN_SECRET_KEY=${{ secrets.KRAKEN_SECRET_KEY }} \
