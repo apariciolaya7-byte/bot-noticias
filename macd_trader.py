@@ -2,6 +2,8 @@ import os
 import pandas as pd
 import pandas_ta as ta
 import ccxt 
+import traceback
+
 
 # --- CONFIGURACIÓN DE KRAKEN ---
 API_KEY = os.getenv('KRAKEN_API_KEY')
@@ -22,7 +24,11 @@ if not API_KEY or API_KEY.strip() == "" or not SECRET_KEY or SECRET_KEY.strip() 
         # El SYMBOL real lo definiremos en el bloque if __name__ == '__main__':
     
     except Exception as e:
-        print(f"❌ FATAL ERROR CCXT: No se pudo inicializar o conectar a Kraken: {e}")
+        print("🚨🚨🚨 ¡¡ERROR CRÍTICO AL INICIALIZAR CCXT!! 🚨🚨🚨")
+        print("-------------------------------------------------")
+        print(f"Razón: {e}")
+        traceback.print_exc() # Esto imprime el traceback completo
+        print("-------------------------------------------------")
         exit(1)
 
 
@@ -44,11 +50,16 @@ def get_historical_data(symbol, timeframe, limit):
         return klines
         
     except ccxt.base.errors.ExchangeError as e:
-        # Esto capturará errores como "API key required" o "Invalid nonce"
-        print(f"❌ Error de API de Kraken al obtener datos: {e}")
+        # Error específico de la API (ej: llave inválida)
+        print("🚨🚨 ¡ERROR DE LA API DE KRAKEN! REVISA LLAVES/PERMISOS! 🚨🚨")
+        print(f"Mensaje de Kraken: {e}")
         return None
+        
     except Exception as e:
-        print(f"❌ Error general en fetch_ohlcv: {e}")
+        # Error inesperado (ej: red, memoria, etc.)
+        print("🚨🚨 ¡ERROR GENERAL INESPERADO EN get_historical_data! 🚨🚨")
+        print(f"Razón: {e}")
+        traceback.print_exc() # Imprime el traceback completo
         return None
 
 # --- Zona de Pruebas ---
