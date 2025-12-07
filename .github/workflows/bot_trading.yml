@@ -33,7 +33,7 @@ jobs:
 
       - name: 3. Ejecutar Bot y Generar Señal
         run: |
-           docker run \
+           docker run \ ubuntu
            -e KRAKEN_API_KEY=${{ secrets.KRAKEN_API_KEY }} \
            -e KRAKEN_SECRET_KEY=${{ secrets.KRAKEN_SECRET_KEY }} \
            \
