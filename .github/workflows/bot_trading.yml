@@ -33,6 +33,15 @@ jobs:
 
       - name: 3. Ejecutar Bot y Generar Señal
         run: |
+          # ❌ ERROR ORIGINAL:
+          # docker run \ ubuntu
+          # Esto fallaba porque el "\" al final hacía que "ubuntu" quedara en otra línea,
+          # y Docker interpretaba que no se había especificado la imagen correctamente.
+          #
+          # ✅ CORRECCIÓN:
+          # La primera línea debe ser solo "docker run \", sin "ubuntu".
+          # La imagen correcta es la que construimos: bot-trading-macd-kraken-v1
+
           docker run \
             -e KRAKEN_API_KEY=${{ secrets.KRAKEN_API_KEY }} \
             -e KRAKEN_SECRET_KEY=${{ secrets.KRAKEN_SECRET_KEY }} \
