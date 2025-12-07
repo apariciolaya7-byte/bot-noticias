@@ -6,10 +6,12 @@ import ccxt # <--- ¡Nueva Importación!
 # --- CONFIGURACIÓN DE KRAKEN ---
 # Las variables de entorno son la forma más segura de manejar credenciales
 # Usamos las mismas variables, pero ahora se conectarán a Kraken.
-API_KEY = os.getenv('KRAKEN_API_KEY') # ¡Cambiar nombre a KRAKEN_API_KEY!
-SECRET_KEY = os.getenv('KRAKEN_SECRET_KEY') # ¡Cambiar nombre a KRAKEN_SECRET_KEY!
+# --- CONFIGURACIÓN DE KRAKEN ---
+API_KEY = os.getenv('KRAKEN_API_KEY')
+SECRET_KEY = os.getenv('KRAKEN_SECRET_KEY')
 
-if not API_KEY or not SECRET_KEY:
+# AÑADIR ESTA VERIFICACIÓN ADICIONAL PARA ELIMINAR ESPACIOS INVISIBLES
+if not API_KEY or API_KEY.strip() == "" or not SECRET_KEY or SECRET_KEY.strip() == "":
     print("Error: Las variables de entorno de Kraken no están configuradas.")
     exit(1)
 
