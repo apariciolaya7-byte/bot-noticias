@@ -1,24 +1,25 @@
 import os
 from binance.client import Client
 from binance.exceptions import BinanceAPIException, BinanceRequestException
+import ccxt
 
 # 1. Configuración de Variables de Entorno
 # Las variables de entorno son la forma más segura de manejar credenciales
 # Debes configurar BINANCE_API_KEY y BINANCE_SECRET_KEY en tu entorno de CodeSpace/Docker
-API_KEY = os.getenv('BINANCE_API_KEY')
-SECRET_KEY = os.getenv('BINANCE_SECRET_KEY')
+export KRAKEN_API_KEY="TU_CLAVE_AQUI"
+export KRAKEN_SECRET_KEY="TU_SECRETO_AQUI"
 
 if not API_KEY or not SECRET_KEY:
-    print("Error: Las variables de entorno BINANCE_API_KEY o BINANCE_SECRET_KEY no están configuradas.")
+    print("Error: Las variables de entorno KRAKEN_API_KEY o KRAKEN_SECRET_KEY no están configuradas.")
     exit(1)
 
 # Inicializar el cliente de Binance
-client = Client(API_KEY, SECRET_KEY)
+client = ccxt.kraken(API_KEY, SECRET_KEY)
 
 # 2. Función para Obtener Datos de 5 Minutos
 def get_historical_data(symbol, interval, lookback):
     """
-    Obtiene datos de velas (candlesticks) de Binance.
+    Obtiene datos de velas (candlesticks) de Kraken.
     :param symbol: Par de trading (ej: 'BTCUSDT').
     :param interval: Temporalidad (ej: Client.KLINE_INTERVAL_5MINUTE).
     :param lookback: Número de periodos a mirar (ej: "100 minutes ago").
@@ -31,10 +32,10 @@ def get_historical_data(symbol, interval, lookback):
         # Una vela es: [Tiempo_Apertura, Apertura, Máximo, Mínimo, Cierre, Volumen, ...]
         return klines
         
-    except BinanceAPIException as e:
+    except krakenAPIException as e:
         print(f"Error de API de Binance: {e}")
         return None
-    except BinanceRequestException as e:
+    except krakenRequestException as e:
         print(f"Error de conexión de Binance: {e}")
         return None
 
