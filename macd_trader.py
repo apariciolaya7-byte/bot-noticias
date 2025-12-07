@@ -13,9 +13,11 @@ if not API_KEY or API_KEY.strip() == "" or not SECRET_KEY or SECRET_KEY.strip() 
     print("Error: Las variables de entorno de Kraken no están configuradas.")
     exit(1)
 
-    # Inicializar el cliente de Kraken (ccxt maneja la conexión)
+    # 🚨 CAMBIO CRÍTICO: Inicializar 'exchange' como global None
+    exchange = None 
+
     try:
-        # Usamos configuración vacía para acceso público
+        # 1. Creamos la instancia
         exchange = ccxt.kraken({
             'enableRateLimit': True,
         }) 
