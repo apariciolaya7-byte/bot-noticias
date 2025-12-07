@@ -35,6 +35,10 @@ def get_historical_data(symbol, timeframe, limit):
     :param limit: Número de velas (ej: 100).
     :return: Lista de velas (OHLCV).
     """
+
+    # ⚠️ ¡SOLUCIÓN! Declara 'exchange' como global
+    global exchange
+
     try:
         klines = exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
         return klines
