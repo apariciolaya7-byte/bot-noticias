@@ -3,79 +3,145 @@ import pandas as pd
 import pandas_ta as ta
 import ccxt
 import traceback
-from ccxt.base.errors import ExchangeError  # ✅ Import correcto
+import logging
+from ccxt.base.errors import ExchangeError
 
-# --- CONFIGURACIÓN DE KRAKEN ---
+# ============================================================
+# CONFIGURACIÓN DE LOGGING
+# ============================================================
+# Se configura el logger global con formato estándar:
+# [timestamp] [nivel] mensaje
+logging.basicConfig(
+    level=logging.INFO,  # Nivel mínimo de log (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+logger = logging.getLogger(__name__)
+
+# ============================================================
+# CONFIGURACIÓN DE KRAKEN
+# ============================================================
 API_KEY = os.getenv('KRAKEN_API_KEY')
 SECRET_KEY = os.getenv('KRAKEN_SECRET_KEY')
 
 if not API_KEY or API_KEY.strip() == "" or not SECRET_KEY or SECRET_KEY.strip() == "":
-    print("Error: Las variables de entorno de Kraken no están configuradas.")
+    logger.error("Las variables de entorno de Kraken no están configuradas.")
     exit(1)
 
-# 🚨 Inicializar 'exchange' fuera del if
 exchange = None
 
 try:
-    # 1. Creamos la instancia
     exchange = ccxt.kraken({
         'enableRateLimit': True,
         'apiKey': API_KEY,
         'secret': SECRET_KEY,
     })
-
     exchange.load_markets()
-    # El SYMBOL real lo definiremos en el bloque if __name__ == '__main__':
+    logger.info("Exchange Kraken inicializado correctamente.")
 
 except Exception as e:
-    print("🚨🚨🚨 ¡¡ERROR CRÍTICO AL INICIALIZAR CCXT!! 🚨🚨🚨")
-    print("-------------------------------------------------")
-    print(f"Razón: {e}")
+    logger.critical("¡¡ERROR CRÍTICO AL INICIALIZAR CCXT!!")
+    logger.critical(f"Razón: {e}")
     traceback.print_exc()
-    print("-------------------------------------------------")
     exit(1)
 
 
-# 2. Función para Obtener Datos de 5 Minutos (Usando ccxt)
+# ============================================================
+# FUNCIÓN: get_historical_data
+# ============================================================
 def get_historical_data(symbol, timeframe, limit):
     """
-    Obtiene datos de velas (candlesticks) de Kraken usando ccxt.
-    :param symbol: Par de trading (ej: 'XBT/USD').
-    :param timeframe: Temporalidad (ej: '5m').
-    :param limit: Número de velas (ej: 100).
-    :return: Lista de velas (OHLCV).
+    Obtiene datos de velas (candlesticks) de Kraken usando CCXT.
+    Maneja errores específicos de la API y errores generales.
     """
     global exchange
 
     try:
         klines = exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
+        logger.info(f"Se obtuvieron {len(klines)} velas para {symbol} en {timeframe}.")
         return klines
 
-    except ExchangeError as e:  # ✅ Uso correcto
-        print("🚨🚨 ¡ERROR DE LA API DE KRAKEN! REVISA LLAVES/PERMISOS! 🚨🚨")
-        print(f"Mensaje de Kraken: {e}")
+    except ExchangeError as e:
+        logger.error("Error de la API de Kraken. Revisa llaves/permisos.")
+        logger.error(f"Mensaje de Kraken: {e}")
         return None
 
     except Exception as e:
-        print("🚨🚨 ¡ERROR GENERAL INESPERADO EN get_historical_data! 🚨🚨")
-        print(f"Razón: {e}")
+        logger.error("Error inesperado en get_historical_data.")
+        logger.error(f"Razón: {e}")
         traceback.print_exc()
         return None
 
 
-# --- Zona de Pruebas ---
+# ============================================================
+# FUNCIÓN: calculate_macd
+# ============================================================
+def calculate_macd(klines_data):
+    """
+    Convierte los datos OHLCV en un DataFrame y calcula el indicador MACD.
+    Devuelve un DataFrame con columnas: MACD_12_26_9, MACDs_12_26_9, MACDh_12_26_9.
+    """
+    if not klines_data or len(klines_data) == 0:
+        logger.warning("No se recibieron datos de velas para calcular MACD.")
+        return None
+
+    df = pd.DataFrame(klines_data, columns=["Timestamp", "Open", "High", "Low", "Close", "Volume"])
+    df["Date"] = pd.to_datetime(df["Timestamp"], unit="ms")
+
+    df.ta.macd(close="Close", fast=12, slow=26, signal=9, append=True)
+    logger.info("MACD calculado correctamente sobre el DataFrame.")
+
+    return df
+
+
+# ============================================================
+# FUNCIÓN: generate_signal
+# ============================================================
+def generate_signal(df):
+    """
+    Analiza la última fila del DataFrame con MACD y determina la acción de trading.
+    Retorna: 'BUY', 'SELL' o 'HOLD'.
+    """
+    if df is None or len(df) == 0:
+        logger.warning("No hay datos disponibles para generar señal.")
+        return "NO DATA"
+
+    last_row = df.iloc[-1]
+
+    macd_line = last_row["MACD_12_26_9"]
+    signal_line = last_row["MACDs_12_26_9"]
+    hist_line = last_row["MACDh_12_26_9"]
+
+    logger.debug(f"Última vela → MACD: {macd_line:.5f}, Señal: {signal_line:.5f}, Histograma: {hist_line:.5f}")
+
+    if macd_line > signal_line:
+        return "BUY"
+    elif macd_line < signal_line:
+        return "SELL"
+    else:
+        return "HOLD"
+
+
+# ============================================================
+# BLOQUE PRINCIPAL DE EJECUCIÓN
+# ============================================================
 if __name__ == '__main__':
 
     SYMBOL = 'BTC/USD'
     TIMEFRAME = '5m'
     LIMIT = 100
 
-    print(f"[{SYMBOL}] ✅ CCXT Inicializado. Solicitando datos de Kraken en {TIMEFRAME}...")
+    logger.info(f"Iniciando proceso para {SYMBOL} en timeframe {TIMEFRAME}...")
 
     klines_data = get_historical_data(SYMBOL, TIMEFRAME, LIMIT)
 
     if klines_data and len(klines_data) > 0:
-        print(f"[{SYMBOL}] ✅ Éxito: Se obtuvieron {len(klines_data)} velas. Calculando MACD...")
-        # Aquí iría la llamada a calculate_macd
+        df_macd = calculate_macd(klines_data)
+
+        if df_macd is not None:
+            signal = generate_signal(df_macd)
+            logger.info(f"Decisión de Trading para {SYMBOL}: {signal}")
+        else:
+            logger.error("No se pudo calcular MACD.")
     else:
-        print(f"[{SYMBOL}] ❌ Fallo en la conexión o datos vacíos recibidos de Kraken.")
+        logger.error("Fallo en la conexión o datos vacíos recibidos de Kraken.")
