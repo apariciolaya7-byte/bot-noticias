@@ -66,7 +66,7 @@ def get_historical_data(symbol, timeframe, limit):
 # --- Zona de Pruebas ---
 if __name__ == '__main__':
 
-    SYMBOL = 'XBT/USD'
+    SYMBOL = 'BTC/USD'
     TIMEFRAME = '5m'
     LIMIT = 100
 
