@@ -33,23 +33,23 @@ jobs:
 
       - name: 3. Ejecutar Bot y Generar Señal
         run: |
-          docker run \
-          -e KRAKEN_API_KEY=${{ secrets.KRAKEN_API_KEY }} \
-          -e KRAKEN_SECRET_KEY=${{ secrets.KRAKEN_SECRET_KEY }} \
-          \
-          # CONFIGURACIÓN DE ESTRATEGIA (Temporalidad de 1h)
-          -e SYMBOL='BTC/USD' \
-          -e TIMEFRAME='1h' \
-          -e LIMIT='300' \
-          \
-          # CONFIGURACIÓN DE RIESGO (Valores por defecto en Python)
-          -e RISK_PER_TRADE='0.01' \
-          -e MAX_DRAWDOWN='0.05' \
-          -e COOLDOWN_HOURS='24' \
-          \
-          # CONFIGURACIÓN DE TELEGRAM (Opcional, si se configuran los secrets)
-          -e TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }} \
-          -e TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }} \
-          \
-          # Ejecuta el script principal
-          bot-trading-macd-kraken-v1 python macd_trader.py
+           docker run \
+           -e KRAKEN_API_KEY=${{ secrets.KRAKEN_API_KEY }} \
+           -e KRAKEN_SECRET_KEY=${{ secrets.KRAKEN_SECRET_KEY }} \
+           \
+           # CONFIGURACIÓN DE ESTRATEGIA (Temporalidad de 1h)
+           -e SYMBOL='BTC/USD' \
+           -e TIMEFRAME='1h' \
+           -e LIMIT='300' \
+           \
+           # CONFIGURACIÓN DE RIESGO (Valores por defecto en Python)
+           -e RISK_PER_TRADE='0.01' \
+           -e MAX_DRAWDOWN='0.05' \
+           -e COOLDOWN_HOURS='24' \
+           \
+           # CONFIGURACIÓN DE TELEGRAM (Opcional, si se configuran los secrets)
+           -e TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }} \
+           -e TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }} \
+           \
+           # Ejecuta el script principal
+           bot-trading-macd-kraken-v1 python macd_trader.py
