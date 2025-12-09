@@ -42,7 +42,7 @@ jobs:
           # Usamos la imagen construida (bot-trading-macd-kraken-v1) y añadimos "-d"
           # para que el contenedor corra en segundo plano.
 
-          docker run -d \
+          docker run  \
             -e KRAKEN_API_KEY=${{ secrets.KRAKEN_API_KEY }} \
             -e KRAKEN_SECRET_KEY=${{ secrets.KRAKEN_SECRET_KEY }} \
             -e SYMBOL='BTC/USD' \
