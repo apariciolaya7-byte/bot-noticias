@@ -14,7 +14,7 @@ on:
       
   # 3. Scheduler Cron: Ejecuta el bot al inicio de cada hora (0 minutos de cada hora).
   schedule:
-    - cron: '0 * * * *'
+    - cron: '30 * * * *'
 
 # =========================================================
 # JOBS

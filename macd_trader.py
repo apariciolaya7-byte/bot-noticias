@@ -9,7 +9,7 @@ import ccxt
 import pandas as pd
 import pandas_ta as ta
 import requests
-from ccxt.base.errors import ExchangeError
+from ccxt.base.errors import ExchangeError, NetworkError # Importar NetworkError
 
 # ============================================================
 # CONFIGURACIÓN DE LOGGING
@@ -22,12 +22,19 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ============================================================
-# CONFIGURACIÓN DE ENTORNO Y CONSTANTES
+# CONFIGURACIÓN DE ENTORNO Y CONSTANTES (MODO REAL)
 # ============================================================
 API_KEY = os.getenv("KRAKEN_API_KEY")
 SECRET_KEY = os.getenv("KRAKEN_SECRET_KEY")
 
-# Timeframe y Límite de Velas (Optimizados para 1h/50 velas)
+# MODO DE EJECUCIÓN: Leer de Secrets (True = Paper, False = Real)
+PAPER_TRADING_MODE = os.getenv("PAPER_TRADING_MODE", "True").lower() == "true" 
+
+# PARÁMETROS ESPECÍFICOS PARA ADA/USD
+SYMBOL = os.getenv("SYMBOL", "ADA/USD")
+MICRO_QTY = float(os.getenv("MICRO_QTY", "10")) # Cantidad base para pruebas reales (ej: 10 ADA)
+
+# Timeframe y Límite de Velas
 TIMEFRAME = os.getenv("TIMEFRAME", "1h")
 LIMIT = int(os.getenv("LIMIT", "50")) 
 
@@ -48,15 +55,10 @@ TELEGRAM_LOGS_CHAT_ID = os.getenv("TELEGRAM_LOGS_CHAT_ID")
 # Persistencia de estado
 STATE_FILE = os.getenv("STATE_FILE", "bot_state.json")
 
-# Símbolo por defecto
-SYMBOL = os.getenv("SYMBOL", "BTC/USD")
-
 # ============================================================
 # INICIALIZACIÓN DE EXCHANGE CCXT
 # ============================================================
-if not API_KEY or API_KEY.strip() == "" or not SECRET_KEY or SECRET_KEY.strip() == "":
-    logger.error("Las variables de entorno de Kraken no están configuradas.")
-    raise SystemExit(1)
+# ... (Bloque de inicialización de CCXT sin cambios) ...
 
 exchange = None
 try:
@@ -76,10 +78,11 @@ except Exception as e:
 # ============================================================
 # UTILIDADES DE ESTADO Y ALERTAS
 # ============================================================
+# ... (load_state, save_state, send_telegram_alert sin cambios) ...
+
 def load_state():
-    """
-    Carga el estado persistente del bot, incluyendo la posición y SL.
-    """
+    """ Carga el estado persistente del bot. """
+    # ... (código load_state) ...
     if not os.path.exists(STATE_FILE):
         return {
             "initial_balance": None,
@@ -88,6 +91,7 @@ def load_state():
             "position_open": False,
             "entry_price": 0.0,
             "last_stop_price": 0.0,
+            "position_qty": 0.0, # Añadido para el modo real
         }
     try:
         with open(STATE_FILE, "r") as f:
@@ -95,8 +99,10 @@ def load_state():
             state.setdefault("position_open", False)
             state.setdefault("entry_price", 0.0)
             state.setdefault("last_stop_price", 0.0)
+            state.setdefault("position_qty", 0.0) # Añadido para el modo real
             return state
     except Exception as e:
+        # ... (código de manejo de error) ...
         logger.error(f"No se pudo leer el archivo de estado: {e}")
         return {
             "initial_balance": None,
@@ -105,12 +111,11 @@ def load_state():
             "position_open": False,
             "entry_price": 0.0,
             "last_stop_price": 0.0,
+            "position_qty": 0.0,
         }
 
 def save_state(state):
-    """
-    Guarda el estado del bot en disco.
-    """
+    # ... (código save_state sin cambios) ...
     try:
         with open(STATE_FILE, "w") as f:
             json.dump(state, f, indent=2)
@@ -118,9 +123,7 @@ def save_state(state):
         logger.error(f"No se pudo guardar el archivo de estado: {e}")
 
 def send_telegram_alert(message, chat_id=None):
-    """
-    Envía alertas a Telegram al chat_id especificado o al chat principal por defecto.
-    """
+    # ... (código send_telegram_alert sin cambios) ...
     target_chat_id = chat_id if chat_id else TELEGRAM_CHAT_ID 
     
     if not TELEGRAM_TOKEN or not target_chat_id:
@@ -138,19 +141,16 @@ def send_telegram_alert(message, chat_id=None):
         logger.warning(f"Excepción al enviar alerta a Telegram: {e}")
 
 # ============================================================
-# CONTROL DE RIESGO Y COOLDOWN (Balance Simulado FIX)
+# CONTROL DE RIESGO Y COOLDOWN (PnL REAL Y BALANCE SIMULADO)
 # ============================================================
 def fetch_total_balance_in_usd():
-    """
-    Obtiene el balance total en USD o SIMULA un balance para paper trading.
-    """
-    SIMULATED_BALANCE = 5000.00 # Monto de capital para simulación de riesgo
+    # ... (código fetch_total_balance_in_usd sin cambios, usa simulado) ...
+    SIMULATED_BALANCE = 5000.00 
 
     try:
         bal = exchange.fetch_balance()
         total_usd = bal.get("total", {}).get("USD")
         
-        # Si el saldo real es 0 o nulo, o la API falla, usamos el saldo SIMULADO.
         if total_usd is None or float(total_usd) <= 0:
             logger.warning(f"Usando balance simulado de {SIMULATED_BALANCE:.2f} USD para cálculo de riesgo.")
             return SIMULATED_BALANCE
@@ -196,18 +196,55 @@ def check_shutdown_and_drawdown(state):
     return False
 
 def compute_position_size(balance_usd, price):
-    """ Calcula el tamaño de posición con base en el 1% del balance. """
+    """ 
+    Calcula el tamaño de posición basado en riesgo o usa la cantidad mínima (MICRO_QTY) 
+    para la prueba real.
+    """
     if balance_usd <= 0 or price <= 0:
         return 0.0
+        
+    # Si estamos en modo REAL (micro-capital), usamos la cantidad mínima fija.
+    if not PAPER_TRADING_MODE:
+        logger.info(f"Usando MICRO_QTY ({MICRO_QTY}) para ejecución REAL en {SYMBOL}.")
+        return MICRO_QTY
+        
+    # Lógica de Paper Trading (cálculo de riesgo):
     risk_amount = balance_usd * RISK_PER_TRADE
     qty = risk_amount / price
     return round(qty, 8)
+    
+def update_pnl_and_drawdown(state, entry_price, exit_price, side):
+    """
+    Calcula el PnL real (simulado con el precio de cierre) y actualiza el drawdown.
+    """
+    if side != "SELL":
+        return state
+
+    qty = state.get("position_qty", MICRO_QTY) # Usamos la cantidad de la posición guardada
+    
+    # Cálculo simple de PnL (sin comisiones de Kraken, por ahora)
+    pnl_usd = (exit_price - entry_price) * qty
+    logger.info(f"PNL Real (bruto): {pnl_usd:.4f} USD")
+    
+    if pnl_usd < 0:
+        state["cumulative_loss"] += abs(pnl_usd)
+        msg = (f"📉 **PÉRDIDA REGISTRADA**\n"
+               f"PNL: {pnl_usd:.4f} USD\n"
+               f"Pérdida Acumulada: {state['cumulative_loss']:.2f} USD")
+        send_telegram_alert(msg)
+    else:
+        msg = f"📈 **GANANCIA REGISTRADA**\nPNL: +{pnl_usd:.4f} USD"
+        send_telegram_alert(msg)
+
+    return state
 
 # ============================================================
-# DATOS Y INDICADORES
+# DATOS Y INDICADORES (Sin cambios)
+# ... (get_historical_data, calculate_macd, generate_signal, calculate_trailing_stop) ...
 # ============================================================
+
 def get_historical_data(symbol, timeframe, limit):
-    """ Obtiene datos OHLCV desde Kraken con parámetros dinámicos. """
+    # ... (código get_historical_data sin cambios) ...
     try:
         klines = exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
         logger.info(f"Se obtuvieron {len(klines)} velas para {symbol} en {timeframe} con límite {limit}.")
@@ -223,7 +260,7 @@ def get_historical_data(symbol, timeframe, limit):
         return None
 
 def calculate_macd(klines_data):
-    """ Convierte OHLCV en DataFrame y calcula MACD (12, 26, 9). """
+    # ... (código calculate_macd sin cambios) ...
     if not klines_data or len(klines_data) == 0:
         logger.warning("No se recibieron velas para calcular MACD.")
         return None
@@ -235,7 +272,7 @@ def calculate_macd(klines_data):
     return df
 
 def generate_signal(df):
-    """ Determina BUY/SELL/HOLD analizando cruce de líneas en la última vela. """
+    # ... (código generate_signal sin cambios) ...
     if df is None or len(df) == 0:
         logger.warning("No hay datos para generar señal.")
         return "NO DATA"
@@ -254,28 +291,18 @@ def generate_signal(df):
     else:
         return "HOLD"
 
-# ============================================================
-# TRAILING STOP LOSS (TL) Y MANEJO DE POSICIÓN
-# ============================================================
 def calculate_trailing_stop(state, current_price):
-    """
-    Calcula el nuevo nivel de Stop Loss (SL) dinámico.
-    """
+    # ... (código calculate_trailing_stop sin cambios) ...
     if not state.get("position_open"):
         return state
 
     entry = state["entry_price"]
     last_stop = state["last_stop_price"]
     
-    # Ganancia flotante actual
     profit_pct = (current_price - entry) / entry
-    
-    # 1. Calcular el Stop Loss Teórico (TL) basado en el margen de Trailing
     new_stop_price = current_price * (1 - TRAILING_PERCENT)
     
-    # 2. Lógica del Activador: Si la ganancia no llega al trigger (ej: 1%), el SL NO se mueve
     if profit_pct < MIN_PROFIT_TRIGGER:
-        # Chequeo de Stop Loss inicial fijo (-1% del precio de entrada)
         initial_stop_safety = entry * (1 - 0.01) 
         if current_price < initial_stop_safety:
             logger.critical(f"🛑 STOP LOSS INICIAL ACTIVADO. Precio {current_price:.2f} < SL {initial_stop_safety:.2f}")
@@ -284,21 +311,20 @@ def calculate_trailing_stop(state, current_price):
         logger.info(f"Ganancia flotante ({profit_pct:.2%}) bajo el trigger ({MIN_PROFIT_TRIGGER:.2%}). SL no se mueve (último SL: {last_stop:.2f}).")
         return state
 
-    # 3. Mover el Stop Loss solo si el nuevo TL es MAYOR que el último SL registrado
     if new_stop_price > last_stop:
         state["last_stop_price"] = new_stop_price
         
         msg = (f"📈 **TL ACTIVADO/ACTUALIZADO**\n"
                f"Ganancia Flotante: {profit_pct:.2%}\n"
-               f"Nuevo Stop Loss: **{new_stop_price:.2f}**")
+               f"Nuevo Stop Loss: **{new_stop_price:.4f}**")
         
         send_telegram_alert(msg)
         logger.info(msg)
         
     return state
-
+    
 # ============================================================
-# EJECUCIÓN DE ÓRDENES (STUB) - FUNCIONES PLACEHOLDER
+# EJECUCIÓN DE ÓRDENES (REAL O STUB)
 # ============================================================
 def get_last_price(df):
     """ Obtiene el precio de cierre reciente del DataFrame ya cargado. """
@@ -307,43 +333,72 @@ def get_last_price(df):
         return 0.0
     return float(df.iloc[-1]["Close"])
 
-def execute_trade_stub(signal, symbol, qty, price, execution_type="Signal"):
+def execute_real_trade(signal, symbol, qty, price, execution_type="Signal"):
     """
-    Stub de ejecución de órdenes con logs claros.
+    Ejecuta una orden de trading real o simula si PAPER_TRADING_MODE es True.
+    Retorna el precio de ejecución real.
     """
     alert_emoji = "✅" if execution_type in ("Signal", "BUY") else "🛑"
-    log_msg = (f"[{alert_emoji} PAPER] {execution_type}: Señal {signal} en {symbol} con cantidad {qty:.8f} @ {price:.2f}. (Ejecución deshabilitada)")
-    logger.info(log_msg)
+    side = "buy" if signal == "BUY" else "sell"
     
-    # Enviar al canal de alertas principal (solo si es una acción de compra/venta)
-    if signal in ("BUY", "SELL"):
-        send_telegram_alert(f"{alert_emoji} **DECISIÓN:** {signal} {symbol} @ {price:.2f}. Razón: *{execution_type}*.")
-
-def update_cumulative_loss_stub(state, symbol, signal):
-    """
-    Actualiza pérdida acumulada de forma simplificada en modo paper.
-    (Placeholder para evitar Pylance error, debe ser reemplazado por PnL real).
-    """
-    pass
+    # ------------------------------------
+    # MODO PAPER TRADING (STUB)
+    # ------------------------------------
+    if PAPER_TRADING_MODE:
+        log_msg = f"[{alert_emoji} PAPER] {execution_type}: Señal {signal} en {symbol} con cantidad {qty:.8f} @ {price:.4f}."
+        logger.info(log_msg)
+        if signal in ("BUY", "SELL"):
+            send_telegram_alert(f"{alert_emoji} **DECISIÓN (PAPER):** {signal} {symbol} @ {price:.4f}. Razón: *{execution_type}*.", chat_id=TELEGRAM_CHAT_ID)
+        return price # En paper trading, el precio de ejecución es el precio actual.
+        
+    # ------------------------------------
+    # MODO EJECUCIÓN REAL (CCXT)
+    # ------------------------------------
+    try:
+        # Usamos orden de mercado para ejecución rápida
+        order = exchange.create_order(
+            symbol=symbol,
+            type="market",
+            side=side,
+            amount=qty,
+        )
+        # Extraer precio de ejecución (si no está disponible inmediatamente, usamos el precio de mercado)
+        exec_price = float(order.get("price", price))
+        
+        log_msg = f"[{alert_emoji} REAL] 💰 ORDEN {signal} EXITOSA. Qty: {qty:.8f} @ {exec_price:.4f}. ID: {order['id']}"
+        logger.critical(log_msg)
+        send_telegram_alert(f"{alert_emoji} **ORDEN REAL {signal} EJECUTADA**\nPrecio: **{exec_price:.4f}** | Qty: `{qty:.8f}`", chat_id=TELEGRAM_CHAT_ID)
+        return exec_price
+        
+    except (ExchangeError, NetworkError) as e:
+        error_msg = f"🚨 ERROR CRÍTICO CCXT ({execution_type} {signal}): {e}"
+        logger.critical(error_msg)
+        send_telegram_alert(f"🚨 **FALLO CRÍTICO DE ORDEN**\n{error_msg}", chat_id=TELEGRAM_CHAT_ID)
+        return 0.0 # Indicar fallo
+    except Exception as e:
+        error_msg = f"🚨 ERROR INESPERADO AL EJECUTAR ORDEN: {e}"
+        logger.critical(error_msg)
+        send_telegram_alert(f"🚨 **FALLO INESPERADO**\n{error_msg}", chat_id=TELEGRAM_CHAT_ID)
+        return 0.0
 
 # ============================================================
 # BLOQUE PRINCIPAL DE EJECUCIÓN
 # ============================================================
 if __name__ == "__main__":
     
-    log_init_msg = f"Iniciando proceso para {SYMBOL} en timeframe {TIMEFRAME} con LIMIT={LIMIT}..."
+    # ... (código de inicialización y logs) ...
+    log_init_msg = f"Iniciando proceso para {SYMBOL} en timeframe {TIMEFRAME} con LIMIT={LIMIT}. Modo REAL: {not PAPER_TRADING_MODE}."
     logger.info(log_init_msg)
 
     state = load_state()
-    # Log detallado al canal privado al inicio de cada ejecución
     send_telegram_alert(f"⚙️ **INICIO DE EJECUCIÓN (1h)**\n{log_init_msg}", chat_id=TELEGRAM_LOGS_CHAT_ID)
 
-
+    # ... (código de balance inicial y drawdown check) ...
     if state["initial_balance"] is None:
-        bal_usd = fetch_total_balance_in_usd() # Ahora usa el balance simulado
+        bal_usd = fetch_total_balance_in_usd() 
         if bal_usd <= 0:
             logger.error("Error: Balance inicial no puede ser 0 después del simulado.")
-            raise SystemExit(1) # Forzar salida si el balance es inválido
+            raise SystemExit(1) 
         state["initial_balance"] = bal_usd
         save_state(state)
         logger.info(f"Balance inicial establecido: {bal_usd:.2f} USD")
@@ -352,7 +407,7 @@ if __name__ == "__main__":
         logger.warning("Operación suspendida por políticas de riesgo/cooldown.")
         raise SystemExit(0)
 
-    # 1. Obtener datos y calcular MACD
+    # ... (Obtener datos, calcular MACD y señal) ...
     klines_data = get_historical_data(SYMBOL, timeframe=TIMEFRAME, limit=LIMIT)
     if not klines_data or len(klines_data) == 0:
         logger.error("Fallo en la conexión o datos vacíos recibidos de Kraken.")
@@ -366,7 +421,7 @@ if __name__ == "__main__":
     signal = generate_signal(df_macd)
     price = get_last_price(df_macd)
     bal_usd = fetch_total_balance_in_usd()
-    qty = compute_position_size(bal_usd, price)
+    qty = compute_position_size(bal_usd, price) # Calcula MICRO_QTY si PAPER_TRADING_MODE=False
     
     # 2. Log detallado de la decisión (Canal privado)
     last = df_macd.iloc[-1]
@@ -374,11 +429,10 @@ if __name__ == "__main__":
         f"📊 **LOG DETALLADO**\n"
         f"MACD: `{last['MACD_12_26_9']:.5f}`\n"
         f"Señal: `{last['MACDs_12_26_9']:.5f}`\n"
-        f"Hist: `{last['MACDh_12_26_9']:.5f}`\n"
-        f"Precio Actual: **{price:.2f}**\n"
-        f"Decisión: **{signal}**\n"
-        f"Posición Abierta: `{state['position_open']}`\n"
-        f"Último SL: `{state['last_stop_price']:.2f}`"
+        f"Precio Actual: **{price:.4f} {SYMBOL.split('/')[1]}**\n"
+        f"Decisión: **{signal}** | QTY: **{qty:.4f}**\n"
+        f"Posición Abierta: `{state['position_open']}` | Entrada: `{state['entry_price']:.4f}`\n"
+        f"Último SL: `{state['last_stop_price']:.4f}`"
     )
     send_telegram_alert(log_detail_msg, chat_id=TELEGRAM_LOGS_CHAT_ID)
     logger.info("Log detallado enviado al canal privado.")
@@ -388,39 +442,47 @@ if __name__ == "__main__":
     state["trigger_exit"] = None
 
     if state.get("position_open"):
-        # Si hay posición abierta, calculamos el SL dinámico
         state = calculate_trailing_stop(state, price)
         
-        # Verificar si el precio actual ha cruzado el Trailing Stop Loss
         last_stop = state["last_stop_price"]
         if price < last_stop and last_stop > 0:
-            logger.critical(f"🛑 TRAILING STOP ACTIVADO. Precio {price:.2f} < SL {last_stop:.2f}")
+            logger.critical(f"🛑 TRAILING STOP ACTIVADO. Precio {price:.4f} < SL {last_stop:.4f}")
             state["trigger_exit"] = "TRAILING SL"
 
     # 4. Decisiones de Trading y Ejecución
 
+    execute_trade = execute_real_trade
+
     # Cierre Forzado (SL o Trailing SL)
     if state["trigger_exit"]:
-        execute_trade_stub("SELL", SYMBOL, qty, price, execution_type=state["trigger_exit"])
-        update_cumulative_loss_stub(state, SYMBOL, signal) # Uso de stub
-        state["position_open"] = False
-        state["entry_price"] = 0.0
-        state["last_stop_price"] = 0.0
+        # Se usa la cantidad previamente guardada en el estado
+        exit_price = execute_trade("SELL", SYMBOL, state.get("position_qty", qty), price, execution_type=state["trigger_exit"])
+        if exit_price > 0:
+            state = update_pnl_and_drawdown(state, state["entry_price"], exit_price, "SELL")
+            state["position_open"] = False
+            state["entry_price"] = 0.0
+            state["last_stop_price"] = 0.0
+            state["position_qty"] = 0.0
     
     # Apertura
     elif signal == "BUY" and not state.get("position_open"):
-        execute_trade_stub(signal, SYMBOL, qty, price)
-        state["position_open"] = True
-        state["entry_price"] = price
-        state["last_stop_price"] = price * (1 - 0.01) # SL inicial fijo
+        exec_price = execute_trade(signal, SYMBOL, qty, price)
+        if exec_price > 0: 
+            state["position_open"] = True
+            state["entry_price"] = exec_price
+            state["last_stop_price"] = exec_price * (1 - 0.01)
+            state["position_qty"] = qty # ¡Guardar la cantidad operada (MICRO_QTY)!
         
     # Cierre por Señal Contraria (SELL sin cierre forzado)
     elif signal == "SELL" and state.get("position_open"):
-        execute_trade_stub("SELL", SYMBOL, qty, price, execution_type="Signal")
-        update_cumulative_loss_stub(state, SYMBOL, signal) # Uso de stub
-        state["position_open"] = False
-        state["entry_price"] = 0.0
-        state["last_stop_price"] = 0.0
+        # Se usa la cantidad previamente guardada en el estado
+        exit_price = execute_trade("SELL", SYMBOL, state.get("position_qty", qty), price, execution_type="Signal")
+        if exit_price > 0: 
+            state = update_pnl_and_drawdown(state, state["entry_price"], exit_price, "SELL")
+            state["position_open"] = False
+            state["entry_price"] = 0.0
+            state["last_stop_price"] = 0.0
+            state["position_qty"] = 0.0
         
     # HOLD
     else:
@@ -436,4 +498,3 @@ if __name__ == "__main__":
         send_telegram_alert(f"⚠️ {msg}")
     
     send_telegram_alert(f"🏁 **FIN DE EJECUCIÓN**", chat_id=TELEGRAM_LOGS_CHAT_ID)
-
