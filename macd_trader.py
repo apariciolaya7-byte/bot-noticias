@@ -27,10 +27,8 @@ logger = logging.getLogger(__name__)
 API_KEY = os.getenv("KRAKEN_API_KEY")
 SECRET_KEY = os.getenv("KRAKEN_SECRET_KEY")
 
-# Timeframe (Lectura de '1h' desde YAML)
+# Timeframe y Límite de Velas (Optimizados para 1h/50 velas)
 TIMEFRAME = os.getenv("TIMEFRAME", "1h")
-
-# Límite de Velas (Lectura de '50' desde YAML para optimizar MACD 12/26/9)
 LIMIT = int(os.getenv("LIMIT", "50")) 
 
 # Control de riesgo
@@ -39,13 +37,13 @@ MAX_DRAWDOWN = float(os.getenv("MAX_DRAWDOWN", "0.05"))
 COOLDOWN_HOURS = int(os.getenv("COOLDOWN_HOURS", "24"))
 
 # PARÁMETROS DE TRAILING STOP LOSS (SL DINÁMICO)
-TRAILING_PERCENT = float(os.getenv("TRAILING_PERCENT", "0.005")) # 0.5% margen de stop
-MIN_PROFIT_TRIGGER = float(os.getenv("MIN_PROFIT_TRIGGER", "0.01")) # 1% de ganancia para activar trailing
+TRAILING_PERCENT = float(os.getenv("TRAILING_PERCENT", "0.005"))
+MIN_PROFIT_TRIGGER = float(os.getenv("MIN_PROFIT_TRIGGER", "0.01"))
 
 # Telegram alerts via env vars
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")           # --> Grupo/Canal de Alertas (Público)
-TELEGRAM_LOGS_CHAT_ID = os.getenv("TELEGRAM_LOGS_CHAT_ID") # --> Canal de Logs (Privado)
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+TELEGRAM_LOGS_CHAT_ID = os.getenv("TELEGRAM_LOGS_CHAT_ID")
 
 # Persistencia de estado
 STATE_FILE = os.getenv("STATE_FILE", "bot_state.json")
@@ -123,7 +121,6 @@ def send_telegram_alert(message, chat_id=None):
     """
     Envía alertas a Telegram al chat_id especificado o al chat principal por defecto.
     """
-    # Usa el ID de alertas principal por defecto
     target_chat_id = chat_id if chat_id else TELEGRAM_CHAT_ID 
     
     if not TELEGRAM_TOKEN or not target_chat_id:
@@ -132,7 +129,6 @@ def send_telegram_alert(message, chat_id=None):
         
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-        # Usamos Markdown para un formato profesional
         payload = {"chat_id": target_chat_id, "text": message, "parse_mode": "Markdown"} 
         resp = requests.post(url, data=payload, timeout=10)
         
@@ -141,26 +137,29 @@ def send_telegram_alert(message, chat_id=None):
     except Exception as e:
         logger.warning(f"Excepción al enviar alerta a Telegram: {e}")
 
-# ... (CONTROL DE RIESGO Y COOLDOWN) ...
-
+# ============================================================
+# CONTROL DE RIESGO Y COOLDOWN (Balance Simulado FIX)
+# ============================================================
 def fetch_total_balance_in_usd():
-    """ Obtiene el balance total en USD (o equivalente) usando CCXT. """
+    """
+    Obtiene el balance total en USD o SIMULA un balance para paper trading.
+    """
+    SIMULATED_BALANCE = 5000.00 # Monto de capital para simulación de riesgo
+
     try:
         bal = exchange.fetch_balance()
         total_usd = bal.get("total", {}).get("USD")
-        if total_usd is None:
-            fiat_total = 0.0
-            for k, v in bal.get("total", {}).items():
-                if k in ("USD", "USDT", "USDC"):
-                    fiat_total += float(v or 0.0)
-            total_usd = fiat_total
-        if total_usd is None:
-            logger.warning("No se pudo determinar el balance total en USD.")
-            return 0.0
+        
+        # Si el saldo real es 0 o nulo, o la API falla, usamos el saldo SIMULADO.
+        if total_usd is None or float(total_usd) <= 0:
+            logger.warning(f"Usando balance simulado de {SIMULATED_BALANCE:.2f} USD para cálculo de riesgo.")
+            return SIMULATED_BALANCE
+            
         return float(total_usd)
+        
     except Exception as e:
-        logger.error(f"Error obteniendo balance: {e}")
-        return 0.0
+        logger.error(f"Error obteniendo balance, usando simulado: {e}")
+        return SIMULATED_BALANCE
 
 def check_shutdown_and_drawdown(state):
     """ Verifica si el bot debe estar apagado por cooldown o si el drawdown supera el límite. """
@@ -181,7 +180,7 @@ def check_shutdown_and_drawdown(state):
 
     # Chequear drawdown
     initial = state.get("initial_balance")
-    if initial:
+    if initial and initial > 0: # Solo chequear si el balance inicial es > 0
         cumulative_loss = float(state.get("cumulative_loss", 0.0))
         if cumulative_loss >= initial * MAX_DRAWDOWN:
             # Activa cooldown
@@ -299,7 +298,7 @@ def calculate_trailing_stop(state, current_price):
     return state
 
 # ============================================================
-# EJECUCIÓN DE ÓRDENES (STUB)
+# EJECUCIÓN DE ÓRDENES (STUB) - FUNCIONES PLACEHOLDER
 # ============================================================
 def get_last_price(df):
     """ Obtiene el precio de cierre reciente del DataFrame ya cargado. """
@@ -312,7 +311,7 @@ def execute_trade_stub(signal, symbol, qty, price, execution_type="Signal"):
     """
     Stub de ejecución de órdenes con logs claros.
     """
-    alert_emoji = "✅" if execution_type == "Signal" else "🛑"
+    alert_emoji = "✅" if execution_type in ("Signal", "BUY") else "🛑"
     log_msg = (f"[{alert_emoji} PAPER] {execution_type}: Señal {signal} en {symbol} con cantidad {qty:.8f} @ {price:.2f}. (Ejecución deshabilitada)")
     logger.info(log_msg)
     
@@ -320,16 +319,11 @@ def execute_trade_stub(signal, symbol, qty, price, execution_type="Signal"):
     if signal in ("BUY", "SELL"):
         send_telegram_alert(f"{alert_emoji} **DECISIÓN:** {signal} {symbol} @ {price:.2f}. Razón: *{execution_type}*.")
 
-
 def update_cumulative_loss_stub(state, symbol, signal):
     """
     Actualiza pérdida acumulada de forma simplificada en modo paper.
-    Motivo de diseño:
-    - Mantener un mecanismo de conteo de drawdown sin operar en real.
-    Nota:
-    - En producción, reemplazar por cálculo de PnL real (realizado y no realizado).
+    (Placeholder para evitar Pylance error, debe ser reemplazado por PnL real).
     """
-    # Aquí solo dejamos la estructura y no alteramos loss para evitar falsas alarmas.
     pass
 
 # ============================================================
@@ -341,15 +335,15 @@ if __name__ == "__main__":
     logger.info(log_init_msg)
 
     state = load_state()
-    # 🚨 Log detallado al canal privado al inicio de cada ejecución
+    # Log detallado al canal privado al inicio de cada ejecución
     send_telegram_alert(f"⚙️ **INICIO DE EJECUCIÓN (1h)**\n{log_init_msg}", chat_id=TELEGRAM_LOGS_CHAT_ID)
 
 
     if state["initial_balance"] is None:
-        bal_usd = fetch_total_balance_in_usd()
+        bal_usd = fetch_total_balance_in_usd() # Ahora usa el balance simulado
         if bal_usd <= 0:
-            logger.warning("Balance inicial no disponible. Se usará 0 para estado.")
-            bal_usd = 0.0
+            logger.error("Error: Balance inicial no puede ser 0 después del simulado.")
+            raise SystemExit(1) # Forzar salida si el balance es inválido
         state["initial_balance"] = bal_usd
         save_state(state)
         logger.info(f"Balance inicial establecido: {bal_usd:.2f} USD")
@@ -391,13 +385,13 @@ if __name__ == "__main__":
 
 
     # 3. Manejo de Trailing Stop Loss y Cierre Forzado
-    state["trigger_exit"] = None # Reset de trigger
+    state["trigger_exit"] = None
 
     if state.get("position_open"):
         # Si hay posición abierta, calculamos el SL dinámico
         state = calculate_trailing_stop(state, price)
         
-        # 🚨 Verificar si el precio actual ha cruzado el Trailing Stop Loss
+        # Verificar si el precio actual ha cruzado el Trailing Stop Loss
         last_stop = state["last_stop_price"]
         if price < last_stop and last_stop > 0:
             logger.critical(f"🛑 TRAILING STOP ACTIVADO. Precio {price:.2f} < SL {last_stop:.2f}")
@@ -408,26 +402,22 @@ if __name__ == "__main__":
     # Cierre Forzado (SL o Trailing SL)
     if state["trigger_exit"]:
         execute_trade_stub("SELL", SYMBOL, qty, price, execution_type=state["trigger_exit"])
-        # En una ejecución real, aquí se calcularía la pérdida y se sumaría a cumulative_loss
-        # update_cumulative_loss_stub(state, symbol, signal, is_loss=True)
+        update_cumulative_loss_stub(state, SYMBOL, signal) # Uso de stub
         state["position_open"] = False
         state["entry_price"] = 0.0
         state["last_stop_price"] = 0.0
     
     # Apertura
     elif signal == "BUY" and not state.get("position_open"):
-        # Apertura de posición
         execute_trade_stub(signal, SYMBOL, qty, price)
         state["position_open"] = True
         state["entry_price"] = price
-        # SL inicial fijo (1% de riesgo inicial)
-        state["last_stop_price"] = price * (1 - 0.01)
+        state["last_stop_price"] = price * (1 - 0.01) # SL inicial fijo
         
     # Cierre por Señal Contraria (SELL sin cierre forzado)
     elif signal == "SELL" and state.get("position_open"):
-        # Cierre de posición por señal MACD
         execute_trade_stub("SELL", SYMBOL, qty, price, execution_type="Signal")
-        # En una ejecución real, aquí se calcularía la ganancia/pérdida
+        update_cumulative_loss_stub(state, SYMBOL, signal) # Uso de stub
         state["position_open"] = False
         state["entry_price"] = 0.0
         state["last_stop_price"] = 0.0
@@ -438,7 +428,6 @@ if __name__ == "__main__":
 
 
     # 5. Guardar Estado y Finalizar
-    update_cumulative_loss_stub(state, SYMBOL, signal)
     save_state(state)
 
     if check_shutdown_and_drawdown(state):
@@ -446,6 +435,5 @@ if __name__ == "__main__":
         logger.warning(msg)
         send_telegram_alert(f"⚠️ {msg}")
     
-    # Log de finalización
     send_telegram_alert(f"🏁 **FIN DE EJECUCIÓN**", chat_id=TELEGRAM_LOGS_CHAT_ID)
 
